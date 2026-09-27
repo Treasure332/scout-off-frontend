@@ -79,7 +79,8 @@ export async function PATCH(
   if (!existing) {
     return NextResponse.json({ error: 'Dispute not found' }, { status: 404 });
   }
-  if (existing.status !== 'pending') {
+  const decidableStatuses = ['pending', 'under_review', 'escalated'];
+  if (!decidableStatuses.includes(existing.status)) {
     return NextResponse.json(
       { error: 'Dispute has already been decided' },
       { status: 409 },
