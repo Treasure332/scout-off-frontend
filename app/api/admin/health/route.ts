@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { privateJson } from '@/lib/httpResponses';
 
 // Proxies the indexer's and backend API's own /health endpoints server-side
 // (see packages/indexer/src/server.ts's handleHealth, server/src/app.js's
@@ -11,7 +11,18 @@ import { NextResponse } from 'next/server';
 
 const FETCH_TIMEOUT_MS = 5000;
 
-export type SubsystemStatus = 'ok' | 'degraded' | 'unreachable';
+export type SubsystemStatus =
+  | 'ok'
+  | 'starting'
+  | 'degraded'
+  | 'unhealthy'
+  | 'unreachable';
+
+const REPORTED_STATUSES: readonly SubsystemStatus[] = [
+  'starting',
+  'degraded',
+  'unhealthy',
+];
 
 export interface SubsystemHealth {
   status: SubsystemStatus;
@@ -41,14 +52,17 @@ async function checkEndpoint(
       cache: 'no-store',
     });
 
-    if (!res.ok) {
+    // The indexer answers 503 with a JSON body when it's `unhealthy`
+    // (packages/indexer/src/server.ts), so that body is still worth showing.
+    const data = await res.json().catch(() => null);
+    if (!res.ok && data?.status !== 'unhealthy') {
       return { status: 'unreachable', error: `HTTP ${res.status}` };
     }
 
-    const data = await res.json().catch(() => ({}) as Record<string, unknown>);
-    const status: SubsystemStatus =
-      data?.status === 'degraded' ? 'degraded' : 'ok';
-    return { status, detail: data };
+    const status: SubsystemStatus = REPORTED_STATUSES.includes(data?.status)
+      ? data.status
+      : 'ok';
+    return { status, detail: data ?? {} };
   } catch (err) {
     const message =
       err instanceof Error
@@ -67,7 +81,10 @@ export async function GET() {
   // must not affect the other (Promise.all over settled per-check results,
   // not a throwing await chain).
   const [indexer, backend] = await Promise.all([
-    checkEndpoint(process.env.NEXT_PUBLIC_INDEXER_API_URL),
+    checkEndpoint(
+      process.env.INDEXER_API_URL_INTERNAL ??
+        process.env.NEXT_PUBLIC_INDEXER_API_URL,
+    ),
     checkEndpoint(
       process.env.API_URL_INTERNAL ?? process.env.NEXT_PUBLIC_API_URL,
     ),
@@ -79,5 +96,5 @@ export async function GET() {
     checkedAt: Date.now(),
   };
 
-  return NextResponse.json(response);
+  return privateJson(response);
 }

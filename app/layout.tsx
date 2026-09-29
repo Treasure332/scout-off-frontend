@@ -17,38 +17,31 @@ import { getMessages } from 'next-intl/server';
 import { validateConfig } from '@/lib/config';
 import { locales, defaultLocale } from '@/lib/locales';
 import { getTextDirection } from '@/lib/rtl';
+import { buildThemeBootstrapScript } from '@/lib/themeBootstrap';
 
 // Analytics and Web Vitals reporting are disabled in tests to avoid
 // polluting real analytics data and to keep jsdom-based test runs from
 // touching PerformanceObserver APIs it doesn't fully implement.
 const isTestEnv = process.env.NODE_ENV === 'test';
 
+// Every relative metadata URL (OG images, canonical links) resolves against
+// NEXT_PUBLIC_APP_URL, so previews work on staging and preview deployments.
+// Localized title/description/Open Graph fields live in
+// app/[locale]/layout.tsx; these English values are only the fallback for
+// routes outside the [locale] segment.
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
+  ),
   title: 'ScoutOff — Decentralized Football Scouting',
   description:
     'Tamper-proof player profiles, verifiable milestones, and direct scout-to-player connections — powered by Stellar Soroban smart contracts.',
   openGraph: {
-    title: 'ScoutOff — Decentralized Football Scouting',
-    description:
-      'Tamper-proof player profiles, verifiable milestones, and direct scout-to-player connections — powered by Stellar Soroban smart contracts.',
-    url: 'https://scoutoff.app',
     siteName: 'ScoutOff',
     type: 'website',
-    images: [
-      {
-        url: 'https://scoutoff.app/og-image.svg',
-        width: 1200,
-        height: 630,
-        alt: 'ScoutOff — Decentralized Football Scouting on Stellar',
-      },
-    ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'ScoutOff — Decentralized Football Scouting',
-    description:
-      'Tamper-proof player profiles, verifiable milestones, and direct scout-to-player connections — powered by Stellar Soroban smart contracts.',
-    images: ['https://scoutoff.app/og-image.svg'],
   },
 };
 
@@ -108,14 +101,14 @@ export default async function RootLayout({
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
         {/*
           No-flash theme script: resolves stored-preference-or-system-preference
-          and applies the `dark` class to <html> before first paint. Must stay
-          in sync with the STORAGE_KEY and resolution logic in
-          context/ThemeContext.tsx (ThemeProvider re-applies the same result
-          on mount, so this is purely to avoid a flash of the wrong theme).
+          and applies the `dark` class to <html> before first paint. Built in
+          lib/themeBootstrap.ts from the same storage key ThemeContext uses
+          (ThemeProvider re-applies the same result on mount, so this is
+          purely to avoid a flash of the wrong theme).
         */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var k='scoutoff_theme_preference';var s=localStorage.getItem(k);var d=s==='light'||s==='dark'?s==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;if(d)document.documentElement.classList.add('dark');}catch(e){}})();`,
+            __html: buildThemeBootstrapScript(),
           }}
         />
       </head>
